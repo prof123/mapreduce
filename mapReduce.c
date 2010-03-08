@@ -113,136 +113,31 @@ void MAP (char* input_split,void (*mapfunc)(char**, KV_t*) , void (*reducefunc)(
   	char buf[LINE_MAX];
   	for(i = 0; i < R; i++)
   		htable[i] = NULL;
-  /*Each Mapper maintains its own hash table*/
-  	//KV_t *ikv;
   	KV_t *retkeyvpair = malloc(sizeof(KV_t));
   	retkeyvpair->key = malloc(sizeof(char)*KEYSIZE);
   	retkeyvpair->value = malloc(sizeof(char)*KEYSIZE);
   	
-  	//printf("input = %s", input_split);
-  	
   	char* input=input_split;
-  	//sprintf(input, "1121112121321324564648768545423123123154654684654321\n");
-  	while(*input!='\0') {
-  		//ikv = malloc(sizeof(KV_t));
-  		//ikv->key = malloc(sizeof(char)*KEYSIZE);
-  		//ikv->value = malloc(sizeof(char)*KEYSIZE);
-  		
-      		(*mapfunc)(&input, retkeyvpair); /*Also increments input..*/ 
+     	(*mapfunc)(&input, retkeyvpair); /*Also increments input..*/ 
      	
-     	//strncpy(ikv->key, retkeyvpair->key, KEYSIZE);
-     	//strncpy(ikv->value, retkeyvpair->value, KEYSIZE);
-     	
-     	//printf("key:%s, value:%s\n", retkeyvpair->key, retkeyvpair->value);
-     	
-      		HASH(retkeyvpair,htable, R); /*effectively groups by key*/
+      	HASH(retkeyvpair,htable, R); /*effectively groups by key*/
+	/**
+	 * Earlier, i iterated through the input, and the user defined mapfunc was a pure map.
+	 * that is, map::a->(key,value) . It was this function's responsibility to keep feeding
+	 * the mapfunc the different inputs.
+	 * However clearly this is not a general solution. We may not know how the iteration is done
+	 * and what the step is.
+	 * So in the new model we assume that the user defined function will be takes a 'list' and returns
+	 * a big list of <key,value>. This gives the user more flexibility and makes our task easier.
+	 */
+	/**
+	 * There might be performance issues however. Earlier approach hashed the output stream of mapfunc output.
+	 * Now we will have to iterate through the output after mapfunc returns and then hash it.
+	 * Can i avoid copies? How?
+	 */
+  	
+	MPI_Barrier( MPI_COMM_WORLD );
 
-		//printf("ikv.key = %s, ikv.value = %s, input = %c", ikv->key, ikv->value, *input );
-  	}	
-  	
-  	MPI_File files[R];
-  	
-  	for(i = 0; i < R; i++) {
-  	
-  		//MPI_File file;
-  		MPI_Barrier( MPI_COMM_WORLD );
-  		if(MPI_File_open(MPI_COMM_WORLD, bucketfnames[i], MPI_MODE_RDWR | 
-				MPI_MODE_CREATE, MPI_INFO_NULL, &files[i]) < 0) { //MPI_MODE_DELETE_ON_CLOSE
-			perror("File open");
-			exit(0);
-		}
-		MPI_Barrier( MPI_COMM_WORLD );
-		
-		int totalsize = 0;
-  		if(htable[i] != NULL) {
-  			//MPI_File file = bucketfiles[i];
-  			struct HT_bucket *temp = htable[i];
-  			
-  			char sbuf[LINE_MAX];
-  			bzero(buf, LINE_MAX);
-
-  			while(temp != NULL) {
-  				
-  				bzero(sbuf, LINE_MAX);
-  				sprintf(sbuf, "%d", temp->size);
-  				
-  				printf("printing key:%s, into:&buf[%d]\n", temp->key, totalsize);
-  				
-  				sprintf(&buf[totalsize], "%s", temp->key);
-  				//memcpy(&buf[totalsize], temp->key, strlen(temp->key)+1);
-  				
-  				printf("printing size:%d, into:&buf[%d]\n", temp->size, strlen(temp->key)+1+totalsize);
-  				
-  				sprintf(&buf[strlen(temp->key)+1+totalsize], "%d", temp->size);
-  				//memcpy(&buf[strlen(temp->key)+1+totalsize], sbuf, strlen(sbuf)+1);
-  				
-  				printf("copying values:");
-  				for(r = 0; r < temp->size; r++) {
-  					if(temp->values[r] == '\0')
-  						printf("_");
-  					else
-  						printf("%c", temp->values[r]);
-  				}
-  				printf(", into:&buf[%d], strlen(temp->key):%d, strlen(sbuf):%d\n", strlen(temp->key)+1+strlen(sbuf)+1+totalsize, strlen(temp->key), strlen(sbuf));
-  				
-  				
-  				memcpy(&buf[strlen(temp->key)+1+strlen(sbuf)+1+totalsize], temp->values, temp->size);
-  				
-  				printf("totalsize was:%d, new totalsize:%d\n", totalsize, totalsize+strlen(temp->key)+1+strlen(sbuf)+1+temp->size);
-  				
-  				totalsize += strlen(temp->key)+1+strlen(sbuf)+1+temp->size;
-  				//printf("key = %s value = %s size = %d\n", temp->key, temp->values, temp->size);
-  				temp = temp->next_key;
-  				
-  				printf("rank = %d, printing unready buffer: ", rank);
-  				for(r = 0; r < totalsize; r++) {
-  					if(buf[r] == '\0')
-  						printf("_");
-  					else
-  						printf("%c", buf[r]);
-  				}
-  				printf("buffer printed\n");
-  			}
-  		}
-  		
-  		printf("rank = %d, printing buffer: ", rank);
-  		for(r = 0; r < totalsize; r++) {
-  			if(buf[r] == '\0')
-  				printf("_");
-  			else
-  				printf("%c", buf[r]);
-  		}
-  		printf("buffer printed\n");
-  		
-  		for(a = 0; a < numtasks; a++) {
-  			if(htable[i] != NULL && rank == a) {
-  					//MPI_File_set_atomicity(file, 1);
-  				printf("bucket = %d, buf = %s\n",i, buf);
-  				MPI_File_write_shared(files[i], buf, totalsize, 
-                    MPI_CHAR, &stat);
-            	//MPI_File_sync(file) ;
-           	}
-           	MPI_File_sync(files[i]);
-           	MPI_Barrier( MPI_COMM_WORLD );
-        }
-        //MPI_Barrier( MPI_COMM_WORLD );
-        //if(rank == 0)
-        //MPI_File_set_view( file, 0, MPI_CHAR, MPI_CHAR, "native", MPI_INFO_NULL );
-        	//MPI_File_close(&file);
-		//}
-		//else
-			//for(a = 0; a < numtasks; a++) {
-			//	MPI_Barrier( MPI_COMM_WORLD );
-			//}
-	}
-	printf("I continued. Rank = %d\n", rank);
-	//MPI_File_close(&file);
-	//MPI_Barrier( MPI_COMM_WORLD );
-	//for(i = 0; i < R; i++) {
-		//MPI_File_close(&bucketfiles[i]);
-		//
-	
-	/** Now spawn reducer jobs.*/	
 	for(i = 0; i < R; i++)
 		if(rank == i)
 			reduce(files[i], stat, reducefunc);

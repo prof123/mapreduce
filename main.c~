@@ -15,7 +15,8 @@ void mapfunc(char** foo, KV_t *kv);
 void reducefunc();
 
 int main(int argc, char **arg) {
-	char **fnames;typedef struct HT_bucket* HTABLE;
+	char **fnames;
+	typedef struct HT_bucket* HTABLE;
 	int nfiles, rprocesses;
 	//	nfiles=1;
 	rprocesses = atoi(arg[1]);
@@ -29,14 +30,18 @@ int main(int argc, char **arg) {
 	
 	return 0;
 }
-
+/**
+ * User defined map function. 
+ */
 void mapfunc(char** foo, KV_t *kv) {
 	char* c=(char*)*foo;
 	sprintf(kv->key, "%c", *c);
 	sprintf(kv->value, "1");
 	(*foo)++;
 }
-
+/**
+ * User defined reduce function
+ */
 void reducefunc(char* inout, char* in) {
 	int i=atoi(in);
 	int j=atoi(inout);
