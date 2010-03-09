@@ -21,9 +21,6 @@
 /*map tasks CAN communicate with all other reducer tasks too.*/
 /*choice: let master handle M--R communication or it be independent*/
 
-typedef struct HT_bucket* HTABLE;
-
-
 /*
  *MAP: for each (key,val) pair produce (ikey,ival)
  *(File,Text)->(String,String)
@@ -104,15 +101,15 @@ void mapReduce(int files, char **fnames, int nprocesses, int rprocesses, void *m
 	MPI_Finalize();
 }
 
-void MAP (char* input_split,void (*mapfunc)(char**, KV_t*) , void (*reducefunc)(char*, char*),
-			int R, char **bucketfnames, MPI_Status stat, int rank, int numtasks)	/*list of file pointers*/
-{  
+void MAP()
+{	
   	HTABLE htable[R];
-  	//bzero(htable, R);
   	int i, r, a;
   	char buf[LINE_MAX];
+
   	for(i = 0; i < R; i++)
   		htable[i] = NULL;
+
   	KV_t *retkeyvpair = malloc(sizeof(KV_t));
   	retkeyvpair->key = malloc(sizeof(char)*KEYSIZE);
   	retkeyvpair->value = malloc(sizeof(char)*KEYSIZE);
@@ -441,6 +438,9 @@ struct reducer_t REDUCER(struct kv_list* to_reduce,int r)
 }*/
 
 
+
+/**
+ */ 
 int HASH(KV_t *kv, HTABLE htable[], int R)
 {
   	/*firstly, determine where key will hash to*/
