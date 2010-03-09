@@ -44,11 +44,23 @@ struct reducer_t {
   struct reducer_t* next;
 };
 
+struct options {
+	int num_map_tasks;
+	int num_reducer_tasks;
+	int total_tasks;
+};
+
+struct udef_functions {
+	void* (*map) (void*);
+	void* (*reduce) (void*);
+	void* (*merge) (void*);
+};
 
 /*******************************************************/
 
-void mapReduce(int files, char **fnames, int nprocesses, int rprocesses,
-	void *mapfunc, void *reducefunc);
+void start_MR (struct options OPTIONS, struct udef_functions udf);
+
+void MAP (int rank, struct options OPTIONS, struct udef_functions udf);
 
 void MAP (char* input_split,void (*mapfunc)(char**, KV_t*), void (*reducefunc)(char*, char*), int R, char **bucketfnames, MPI_Status stat, int rank, int numtasks);
 
