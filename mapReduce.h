@@ -56,11 +56,23 @@ struct udef_functions {
 	void* (*merge) (void*);
 };
 
+typedef struct key_list {
+	keyy_t key;
+	key_list* next;
+};
+
 /*******************************************************/
 
 void start_MR (struct options OPTIONS, struct udef_functions udf);
 
-void MAP (int rank, struct options OPTIONS, struct udef_functions udf);
+//return list of unique keys?
+key_list MAP (int rank, struct options OPTIONS, struct udef_functions udf);
+
+int key_to_rank(keyy_t key);
+
+void REDUCE (int rank, struct options OPTIONS, struct udef_functions udf);
+
+
 
 void MAP (char* input_split,void (*mapfunc)(char**, KV_t*), void (*reducefunc)(char*, char*), int R, char **bucketfnames, MPI_Status stat, int rank, int numtasks);
 
