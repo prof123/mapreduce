@@ -1,0 +1,5 @@
+#ifdef ELEMENT
+#undef ELEMENT
+
+#endif
+typedef int ELEMENT;
