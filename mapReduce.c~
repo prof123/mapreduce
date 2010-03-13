@@ -9,8 +9,8 @@
 #include <sys/stat.h>
 #include <limits.h>
 #include "mapReduce.h"
-#include "MAP.h"
-#include "dyn_array.h"
+//#define SIZE 4
+
 
 /*Ranks for the global communicator clique
  * Assume mapping tasks numbered from 0 to M-1. 0 is master.
@@ -103,43 +103,45 @@ void mapReduce(int files, char **fnames, int nprocesses, int rprocesses, void *m
 
 void MAP (int rank, struct options OPTIONS, struct udef_functions udf)
 {
-	void* mapfun = udf.mapfunc ;
-	
-	struct MAP_out map_output ;
-     	map_output = (*mapfunc)(rank) ;
-	/* User does the input split based on rank. */
-	/* And does dynamic array stuff.*/
-	DYNARRAY output = map_output.data ;
-	size_t elem_size = map_output.data.elem_size ;
+	void* (mapfun) () = udf.mapfunc;	
+  	HTABLE htable[R];
+  	int i, r, a;
+  	char buf[LINE_MAX];
 
-	int i = 0 ;
-	struct MAP_keyval keyval ;
+  	for(i = 0; i < R; i++)
+  		htable[i] = NULL;
 
-	while (i < output.count) {
-		keyval = out.put[i] ;
-		HASH (keyval) ;
-		i++ ;
-	}
+  	KV_t *retkeyvpair = malloc(sizeof(KV_t));
+  	retkeyvpair->key = malloc(sizeof(char)*KEYSIZE);
+  	retkeyvpair->value = malloc(sizeof(char)*KEYSIZE);
+  	
+  	char* input=input_split;
+     	(*mapfunc)(&input, retkeyvpair); /*Also increments input..*/ 
+     	
+      	HASH(retkeyvpair,htable, R); /*effectively groups by key*/
+	/**
+	 * Earlier, i iterated through the input, and the user defined mapfunc was a pure map.
+	 * that is, map::a->(key,value) . It was this function's responsibility to keep feeding
+	 * the mapfunc the different inputs.
+	 * However clearly this is not a general solution. We may not know how the iteration is done
+	 * and what the step is.
+	 * So in the new model we assume that the user defined function will be takes a 'list' and returns
+	 * a big list of <key,value>. This gives the user more flexibility and makes our task easier.
+	 */
+	/**
+	 * There might be performance issues however. Earlier approach hashed the output stream of mapfunc output.
+	 * Now we will have to iterate through the output after mapfunc returns and then hash it.
+	 * Can i avoid copies? How?
+	 */
   	
 	MPI_Barrier( MPI_COMM_WORLD );
 
+	for(i = 0; i < R; i++)
+		if(rank == i)
+			reduce(files[i], stat, reducefunc);
+		
 }
 
-
-void initialize_HASH_table() 
-{
-	//TODO
-}
-
-
-int HASH (struct MAP_keyval keyval) 
-{
-	map_key_t key ;
-	map_val_t val ;
-	key = keyval.key ;
-	value = keyval.value ;
-	
-}
 void reduce(MPI_File file, MPI_Status status, void (*reducefunc)(char*, char*)) {
 	int i;
 	struct reducer_t* first, *temp;
