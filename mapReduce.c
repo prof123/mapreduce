@@ -12,41 +12,6 @@
 #include "MAP.h"
 #include "dyn_array.h"
 
-/*Ranks for the global communicator clique
- * Assume mapping tasks numbered from 0 to M-1. 0 is master.
- *reduce tasks from M to M+R-1. 
- *Hence the number of processes given as input is M+R
- */
-
-/*map tasks CAN communicate with all other reducer tasks too.*/
-/*choice: let master handle M--R communication or it be independent*/
-
-/*
- *MAP: for each (key,val) pair produce (ikey,ival)
- *(File,Text)->(String,String)
- */
-
-/*
- *KeyValue pairs, @KV@: (String,String)
- *Will work for all steps of the process. We leave it to the user-defined map an *d reduce functions to do the appropriate conversions.
- */
-
-
-/*
-struct InputKV_t {
-  FILE* file;
-  void* file_ptr;
-};
-*/
-
-
-
-/* struct H_TABLE { */
-/*   struct HT_bucket* bucket[R]; */
-/* }; */
-
-
-
 
 void mapReduce(int files, char **fnames, int nprocesses, int rprocesses, void *mapfunc, void *reducefunc)
 {
@@ -126,11 +91,17 @@ void MAP (int rank, struct options OPTIONS, struct udef_functions udf)
 }
 
 
+HTABLE Hash_Table ;
+
 void initialize_HASH_table() 
 {
-	//TODO
+	Hash_Table.count = 0 ;
+	Hash_Table.next_key = NULL ;
 }
 
+/**
+ * Hash given keyval pair into the Hash_Table
+ */
 
 int HASH (struct MAP_keyval keyval) 
 {
@@ -138,8 +109,58 @@ int HASH (struct MAP_keyval keyval)
 	map_val_t val ;
 	key = keyval.key ;
 	value = keyval.value ;
-	
+	HTABLE curr_ptr = Hash_Table ; 
+
+	while ((curr_ptr->next)!= NULL) {
+		if( (*keycmp)(curr_ptr->key , key)) { //equal
+			insert_into (curr_ptr->values , keyval) ;
+			curr_ptr->count = curr_ptr->count+1 ;
+
+			return 1;
+		}
+		curr_ptr = curr_ptr->next ;
+	}
+	//reach here means key not found.Create new.
+	HTABLE new_entry ;
+	new_entry->key = key ;
+	new_entry->values = NULL ;
+	insert_into(new_entry->values , keyval) ;
+	new_entry->count = 1 ;
+	new_entry->next = NULL ;
+
+	return 1 ;
 }
+#define TAG_MAX	10000 
+//tag_max is max number of tags supported == INT_MAX
+struct tag_entry[TAG_MAX] tag_table ;
+
+/**
+ * goes through hash table and populates tag table..
+ */
+int populate_tag_tab() 
+{
+	HTABLE curr_key = Hash_Table ;
+	map_key_t key ;
+	struct tag_entry t;
+	int i = 0 ;
+	while (curr_key!=NULL) {
+		key = curr_key->key ;
+		tag_table[i].tag = i ;
+		tag_table[i].key = key ;
+		return 1 ;
+	}
+	return 0 ;
+}
+
+/* TODO */
+int is_mapper(int rank) {
+	return 1 ;
+}
+/* TODO */
+int is_reducer(int rank) {
+	return 1;
+}
+
 void reduce(MPI_File file, MPI_Status status, void (*reducefunc)(char*, char*)) {
 	int i;
 	struct reducer_t* first, *temp;

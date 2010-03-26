@@ -9,43 +9,8 @@
 #include <sys/stat.h>
 #include <limits.h>
 #include "mapReduce.h"
-//#define SIZE 4
-
-
-/*Ranks for the global communicator clique
- * Assume mapping tasks numbered from 0 to M-1. 0 is master.
- *reduce tasks from M to M+R-1. 
- *Hence the number of processes given as input is M+R
- */
-
-/*map tasks CAN communicate with all other reducer tasks too.*/
-/*choice: let master handle M--R communication or it be independent*/
-
-/*
- *MAP: for each (key,val) pair produce (ikey,ival)
- *(File,Text)->(String,String)
- */
-
-/*
- *KeyValue pairs, @KV@: (String,String)
- *Will work for all steps of the process. We leave it to the user-defined map an *d reduce functions to do the appropriate conversions.
- */
-
-
-/*
-struct InputKV_t {
-  FILE* file;
-  void* file_ptr;
-};
-*/
-
-
-
-/* struct H_TABLE { */
-/*   struct HT_bucket* bucket[R]; */
-/* }; */
-
-
+#include "MAP.h"
+#include "dyn_array.h"
 
 
 void mapReduce(int files, char **fnames, int nprocesses, int rprocesses, void *mapfunc, void *reducefunc)
@@ -103,43 +68,67 @@ void mapReduce(int files, char **fnames, int nprocesses, int rprocesses, void *m
 
 void MAP (int rank, struct options OPTIONS, struct udef_functions udf)
 {
-	void* (mapfun) () = udf.mapfunc;	
-  	HTABLE htable[R];
-  	int i, r, a;
-  	char buf[LINE_MAX];
+	void* mapfun = udf.mapfunc ;
+	
+	struct MAP_out map_output ;
+     	map_output = (*mapfunc)(rank) ;
+	/* User does the input split based on rank. */
+	/* And does dynamic array stuff.*/
+	DYNARRAY output = map_output.data ;
+	size_t elem_size = map_output.data.elem_size ;
 
-  	for(i = 0; i < R; i++)
-  		htable[i] = NULL;
+	int i = 0 ;
+	struct MAP_keyval keyval ;
 
-  	KV_t *retkeyvpair = malloc(sizeof(KV_t));
-  	retkeyvpair->key = malloc(sizeof(char)*KEYSIZE);
-  	retkeyvpair->value = malloc(sizeof(char)*KEYSIZE);
-  	
-  	char* input=input_split;
-     	(*mapfunc)(&input, retkeyvpair); /*Also increments input..*/ 
-     	
-      	HASH(retkeyvpair,htable, R); /*effectively groups by key*/
-	/**
-	 * Earlier, i iterated through the input, and the user defined mapfunc was a pure map.
-	 * that is, map::a->(key,value) . It was this function's responsibility to keep feeding
-	 * the mapfunc the different inputs.
-	 * However clearly this is not a general solution. We may not know how the iteration is done
-	 * and what the step is.
-	 * So in the new model we assume that the user defined function will be takes a 'list' and returns
-	 * a big list of <key,value>. This gives the user more flexibility and makes our task easier.
-	 */
-	/**
-	 * There might be performance issues however. Earlier approach hashed the output stream of mapfunc output.
-	 * Now we will have to iterate through the output after mapfunc returns and then hash it.
-	 * Can i avoid copies? How?
-	 */
+	while (i < output.count) {
+		keyval = out.put[i] ;
+		HASH (keyval) ;
+		i++ ;
+	}
   	
 	MPI_Barrier( MPI_COMM_WORLD );
 
-	for(i = 0; i < R; i++)
-		if(rank == i)
-			reduce(files[i], stat, reducefunc);
-		
+}
+
+
+HTABLE Hash_Table ;
+
+void initialize_HASH_table() 
+{
+	Hash_Table.count = 0 ;
+	Hash_Table.next_key = NULL ;
+}
+
+/**
+ * Hash given keyval pair into the Hash_Table
+ */
+
+int HASH (struct MAP_keyval keyval) 
+{
+	map_key_t key ;
+	map_val_t val ;
+	key = keyval.key ;
+	value = keyval.value ;
+	HTABLE curr_ptr = Hash_Table ; 
+
+	while ((curr_ptr->next)!= NULL) {
+		if( (*keycmp)(curr_ptr->key , key)) { //equal
+			insert_into (curr_ptr->values , keyval) ;
+			curr_ptr->count = curr_ptr->count+1 ;
+
+			return 1;
+		}
+		curr_ptr = curr_ptr->next ;
+	}
+	//reach here means key not found.Create new.
+	HTABLE new_entry ;
+	new_entry->key = key ;
+	new_entry->values = NULL ;
+	insert_into(new_entry->values , keyval) ;
+	new_entry->count = 1 ;
+	new_entry->next = NULL ;
+
+	return 1 ;
 }
 
 void reduce(MPI_File file, MPI_Status status, void (*reducefunc)(char*, char*)) {

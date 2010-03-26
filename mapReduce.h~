@@ -29,10 +29,11 @@ typedef struct KV_pair {
  */
 
 struct HT_bucket {
-  keyy_t key;
-  size_t size;
-  struct HT_bucket* next_key;
-  val_t values;
+  keyy_t key ;
+  size_t size ;
+  int count ;	//number of key-val pairs stored.
+  struct HT_bucket* next_key ;
+  DYNARRAY values ;
 };
 
 typedef struct HT_bucket* HTABLE;
