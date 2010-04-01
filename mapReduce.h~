@@ -29,7 +29,7 @@ typedef struct KV_pair {
  */
 
 struct HT_bucket {
-  keyy_t key ;
+  map_key_t key ;
   size_t size ;
   int count ;	//number of key-val pairs stored.
   struct HT_bucket* next_key ;
@@ -37,6 +37,11 @@ struct HT_bucket {
 };
 
 typedef struct HT_bucket* HTABLE;
+
+struct tag_entry {
+  int tag ;
+  map_key_t key ;
+}
 
 struct reducer_t {
   keyy_t key;

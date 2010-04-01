@@ -81,7 +81,7 @@ void MAP (int rank, struct options OPTIONS, struct udef_functions udf)
 	struct MAP_keyval keyval ;
 
 	while (i < output.count) {
-		keyval = out.put[i] ;
+		keyval = output[i] ; 
 		HASH (keyval) ;
 		i++ ;
 	}
@@ -111,9 +111,9 @@ int HASH (struct MAP_keyval keyval)
 	value = keyval.value ;
 	HTABLE curr_ptr = Hash_Table ; 
 
-	while ((curr_ptr->next)!= NULL) {
+	while ((curr_ptr->next_key)!= NULL) {
 		if( (*keycmp)(curr_ptr->key , key)) { //equal
-			insert_into (curr_ptr->values , keyval) ;
+			insert_into (curr_ptr->values , keyval) ;//K:check keyval type does not match
 			curr_ptr->count = curr_ptr->count+1 ;
 
 			return 1;
@@ -133,22 +133,27 @@ int HASH (struct MAP_keyval keyval)
 #define TAG_MAX	10000 
 //tag_max is max number of tags supported == INT_MAX
 struct tag_entry[TAG_MAX] tag_table ;
-
+//struct tag_entry tag_table[TAG_MAX] ;
 /**
  * goes through hash table and populates tag table..
  */
 int populate_tag_tab() 
 {
 	HTABLE curr_key = Hash_Table ;
-	map_key_t key ;
+	map_key_t key ; 
 	struct tag_entry t;
-	int i = 0 ;
+	int i = 0;
 	while (curr_key!=NULL) {
+	  
 		key = curr_key->key ;
 		tag_table[i].tag = i ;
-		tag_table[i].key = key ;
+		tag_table[i].key = key ; 
+		//K:curr_key=curr_key->next_key; i++;
+		
 		return 1 ;
+		
 	}
+	 //K: if(i>0) return 1 else return 0;
 	return 0 ;
 }
 

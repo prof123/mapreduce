@@ -1,4 +1,7 @@
 #include "dyn_array.h"
+/**
+ * This is the dynamic array implementation used
+ */
 
 DYNARRAY new_array (size_t elem_size) 
 {
@@ -9,6 +12,7 @@ DYNARRAY new_array (size_t elem_size)
 	array->DATA = malloc(elem_size) ;
 	return array ;
 }
+
 
 int insert_into (DYNARRAY array , ELEMENT e)  //size of the element
 {
