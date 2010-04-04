@@ -12,65 +12,29 @@
 #include "MAP.h"
 #include "dyn_array.h"
 
-
-void mapReduce(int files, char **fnames, int nprocesses, int rprocesses, void *mapfunc, void *reducefunc)
+int main(int argc, char** argv)
 {
-	int numtasks, rank, source=0, dest, tag=1, i, amount;
-	char buf[LINE_MAX], **bucketfnames, bucketfname[LINE_MAX];
-	MPI_File file, *bucketfiles;
-	MPI_Offset size, startpoint;
-	
-	bzero(buf, LINE_MAX);
+	/**
+	 * TODO:Spawn all the mpi stuff here..
+	 * TODO:fill the options for MAP.
+	 */
+	if( is_mapper(myrank)) {
 
-	MPI_Status stat;
-
-	MPI_Init(NULL,NULL);
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
-	
-	if(MPI_File_open(MPI_COMM_WORLD, fnames[0], MPI_MODE_RDONLY | MPI_MODE_UNIQUE_OPEN, MPI_INFO_NULL, &file) < 0) {
-		perror("File open");
-		exit(0);
-	}
-	
-	bucketfnames = malloc(rprocesses * sizeof(char *));
-	//bucketfiles = malloc(rprocesses * sizeof(MPI_File));
-	for(i = 0; i < rprocesses; i++) {
-		sprintf(bucketfname, "file%d", i);
-		bucketfnames[i] = malloc(strlen(bucketfname)+1);
-		sprintf(bucketfnames[i], "%s", bucketfname);
+		initialize_HASH_table() ;
+		MAP(myrank,OPTIONS,udf) ;
 	}
 
-  	MPI_File_get_size(file, &size);
-  	startpoint = size / numtasks * rank;
-  	
-  	if(rank != numtasks - 1)
-  		amount = size / numtasks * (rank + 1) - startpoint;
-  	else
-  		amount = size - startpoint;
-  	
-    MPI_File_read_at(file, startpoint, buf, amount, MPI_CHAR, &stat);
-  	
-  	MAP (buf, mapfunc, reducefunc, rprocesses, bucketfnames, stat, rank, numtasks);
-  	
- /* 	printf("rank = %d, data = ", rank);
-  	for(i = 0; i < amount; i++)
-  		printf(" %c",buf[i]);
-  	printf("\n");*/
-  	//MPI_File filee;
-  	printf("The End\n");
-	MPI_Barrier( MPI_COMM_WORLD );
-	printf("Closing\n");
-	
-	MPI_File_close(&file);
-	MPI_Finalize();
+	if(is_reducer(myrank)) {
+
+	}
 }
+
 
 void MAP (int rank, struct options OPTIONS, struct udef_functions udf)
 {
 	void* mapfun = udf.mapfunc ;
 	
-	struct MAP_out map_output ;
+	struct MAP_out map_output ; 	//Store the output of udefmap
      	map_output = (*mapfunc)(rank) ;
 	/* User does the input split based on rank. */
 	/* And does dynamic array stuff.*/
@@ -80,14 +44,19 @@ void MAP (int rank, struct options OPTIONS, struct udef_functions udf)
 	int i = 0 ;
 	struct MAP_keyval keyval ;
 
+/*Careful!We now assume that the type of the keyval etc is known. 
+ * If we go the size way then modify dynamic array implementation slightly
+ */
 	while (i < output.count) {
-		keyval = output[i] ; 
+
+		keyval = output[i] ;
+
 		HASH (keyval) ;
+
 		i++ ;
 	}
   	
-	MPI_Barrier( MPI_COMM_WORLD );
-
+	populate_tag_tab() ;
 }
 
 
@@ -100,9 +69,13 @@ void initialize_HASH_table()
 }
 
 /**
- * Hash given keyval pair into the Hash_Table
+ * Hash given keyval pair into the Hash_Table. Assumes we have the keycompare function
+ * keycmp.Should the user gives that?
  */
 
+/**
+ * TODO: CHECK this function for pointer safety and logic.
+ */
 int HASH (struct MAP_keyval keyval) 
 {
 	map_key_t key ;
@@ -111,9 +84,9 @@ int HASH (struct MAP_keyval keyval)
 	value = keyval.value ;
 	HTABLE curr_ptr = Hash_Table ; 
 
-	while ((curr_ptr->next_key)!= NULL) {
+	while ((curr_ptr->next)!= NULL) {
 		if( (*keycmp)(curr_ptr->key , key)) { //equal
-			insert_into (curr_ptr->values , keyval) ;//K:check keyval type does not match
+			insert_into (curr_ptr->values , keyval) ;
 			curr_ptr->count = curr_ptr->count+1 ;
 
 			return 1;
@@ -133,27 +106,25 @@ int HASH (struct MAP_keyval keyval)
 #define TAG_MAX	10000 
 //tag_max is max number of tags supported == INT_MAX
 struct tag_entry[TAG_MAX] tag_table ;
-//struct tag_entry tag_table[TAG_MAX] ;
+
 /**
  * goes through hash table and populates tag table..
+ */
+/*
+ * TODO: CHECK for logical loopholes please
  */
 int populate_tag_tab() 
 {
 	HTABLE curr_key = Hash_Table ;
-	map_key_t key ; 
+	map_key_t key ;
 	struct tag_entry t;
-	int i = 0;
+	int i = 0 ;
 	while (curr_key!=NULL) {
-	  
 		key = curr_key->key ;
 		tag_table[i].tag = i ;
-		tag_table[i].key = key ; 
-		//K:curr_key=curr_key->next_key; i++;
-		
+		tag_table[i].key = key ;
 		return 1 ;
-		
 	}
-	 //K: if(i>0) return 1 else return 0;
 	return 0 ;
 }
 
@@ -161,371 +132,20 @@ int populate_tag_tab()
 int is_mapper(int rank) {
 	return 1 ;
 }
+
 /* TODO */
 int is_reducer(int rank) {
 	return 1;
 }
 
-void reduce(MPI_File file, MPI_Status status, void (*reducefunc)(char*, char*)) {
-	int i;
-	struct reducer_t* first, *temp;
-	intoReduceType(file, &first, status);
-
-
-	printf("All the keys in the end:\n");
-	
-	temp = first;
-	while(temp != NULL) {
-			
-		printf("stored key:%s, size:%d\n", temp->key, temp->size);
-		for(i = 0; i < temp->size; i++)
-			printf("value[%d]:%s\n", i, temp->vals[i]);
-				
-		temp = temp->next;
-	}
-
-	/*BEGIN: prateek
- 	*Now onto the actual reduce. We are finished with grouping by key now***/
-	temp=first; //first is the first 'bucket'
-	while(temp!=NULL)  {
-		int i=0;
- 		char* reduced_val = temp->vals[0];  //the first value. ?
-
-		for(i=0; i<(temp->size-1); i++) {
-			//userdefReduce(reduced_val , temp->vals[i+1]);
-			(*reducefunc)(reduced_val, temp->vals[i+1]);
-		}
-
-		printf("KEY:%s , VALUE:%s\n",temp->key,reduced_val);
-
- 		temp=temp->next;
- 	}
-
-
+/* TODO */
+int is_merger(int rank) {
+	return 1;
 }
-
-/****REDUCED****/
-	
-
-/*user defined Reduce function*** - simple addition*/
-/*void userdefReduce(char* inout, char* in)
-{
-	int i=atoi(in);
-	int j=atoi(inout);
-	sprintf(inout, "%d", (i+j));
-}
-*/
-/* itoa:  convert n to characters in s. picked from K&R. */
-/*void itoa(int n, char s[])
-{ 
-    int i, sign;
-
-    if ((sign = n) < 0)  /* record sign */
- /*       n = -n;          /* make n positive */
- /*   i = 0;
-    do {       /* generate digits in reverse order */
-  /*      s[i++] = n % 10 + '0';   /* get next digit */
-   /* } while ((n /= 10) > 0);     /* delete it */
-/*    if (sign < 0)
-        s[i++] = '-';
-    s[i] = '\0';
-    reverse(s);
-} 
-
-/* reverse:  reverse string s in place.Again K&R. */
-/*void reverse(char s[])
-{
-    int c, i, j;
-
-    for (i = 0, j = strlen(s)-1; i<j; i++, j--) {
-        c = s[i];
-        s[i] = s[j];
-        s[j] = c;
-    }
-}*/
-/*END: prateek */
-
-
-int intoReduceType(MPI_File file, struct reducer_t** firstt, MPI_Status status) {
-	char buf[LINE_MAX], *bufptr, keybuf[100], sizebuf[100], **vals, valsbuf[100][100], valbuf[100];
-	int ret = 0, r, atnow = 0, valsize, values, readbytes, i, a;
-	MPI_Offset startpoint = 0, fsize;
-	struct reducer_t *temp = NULL, *first = NULL, *next;
-	
-	bzero(buf, LINE_MAX);
-	//MPI_File_set_view( file, 0, MPI_CHAR, MPI_CHAR, "native", MPI_INFO_NULL );
-	//MPI_File_read(file, buf, LINE_MAX, MPI_CHAR, &status);
-	
-	MPI_File_get_size(file, &fsize);
-	MPI_File_read_at(file, startpoint, buf, fsize, MPI_CHAR, &status);
-	
-	printf("printing buffer, size = %d: ", fsize);
-  	for(r = 0; r < fsize; r++) {
-  		if(buf[r] == '\0')
-  			printf("_");
-  		else
-  			printf("%c", buf[r]);
-  	}
-  	printf("buffer printed\n");
-	//exit(0);
-	if(strlen(buf) == 0)
-		return 0;
-	
-	bufptr = buf;
-	while(1) {
-		if((atnow+1) >= fsize)
-			break;
-		
-		//bufptr = &buf[atnow];
-		
-		bzero(keybuf, 100);
-		memcpy(keybuf, bufptr, strlen(bufptr));
-		atnow += strlen(keybuf) +1;
-		bufptr = &buf[atnow];
-		
-		bzero(sizebuf, 100);
-		memcpy(sizebuf, bufptr, strlen(bufptr));
-		atnow += strlen(sizebuf) +1;
-		bufptr = &buf[atnow];
-		
-		valsize = atoi(sizebuf);
-		values = 0;
-		readbytes = 0;
-		while(1) {
-			bzero(valbuf, 100);
-			memcpy(valbuf, bufptr, strlen(bufptr));
-			values++;
-			strcpy(valsbuf[values-1], valbuf);
-			readbytes += strlen(valbuf)+1;
-			
-			atnow += strlen(valbuf)+1;
-			bufptr = &buf[atnow];
-			
-			if(readbytes == valsize)
-				break;
-		}/*
-		printf("key:%s, size:%d\n", keybuf, values);
-		for(i = 0; i < values; i++)
-			printf("value[%d]:%s\n", i, valsbuf[i]);
-			*/
-	//	vals = malloc(values * sizeof(char *));
-		//for(i = 0; i < values; i++) {
-		//	vals[i] = malloc(strlen(valsbuf[i]) * sizeof(char));
-		//	strcpy(vals[i], valsbuf[i]);	
-		//}
-		
-		temp = first;
-		
-					// This is for the first key.
-		if(temp == NULL) {
-			temp = malloc(sizeof(struct reducer_t));
-			temp->next = NULL;
-			temp->size = values;
-			temp->key = malloc((strlen(keybuf)+1) * sizeof(char));
-			strcpy(temp->key, keybuf);
-			
-			temp->vals = malloc(values * sizeof(char *));
-			for(i = 0; i < values; i++) {
-				temp->vals[i] = malloc((strlen(valsbuf[i])+1) * sizeof(char));
-				strcpy(temp->vals[i], valsbuf[i]);	
-			}
-			
-			first = temp;
-			/*
-			printf("first stored key:%s, size:%d\n", temp->key, temp->size);
-			for(i = 0; i < temp->size; i++)
-				printf("value[%d]:%s\n", i, temp->vals[i]);
-			
-			printf("position now:%d\n",atnow);*/
-			
-			continue;
-		}
-		
-		
-		//printf("");
-		
-		
-		
-		while(1) {
-			if(strcmp(temp->key, keybuf) == 0) {
-				char **copy = temp->vals;
-				temp->vals = malloc((temp->size+values) * sizeof(char *));
-				for(i = 0; i < temp->size; i++) {
-					temp->vals[i] = malloc((strlen(copy[i])+1) * sizeof(char));
-					strcpy(temp->vals[i], copy[i]);
-				}
-				for(a = 0;i < (temp->size+values); a++, i++) {
-					temp->vals[i] = malloc((strlen(valsbuf[a])+1) * sizeof(char));
-					strcpy(temp->vals[i], valsbuf[a]);
-				}
-				for(i = 0; i < temp->size; i++)
-					free(copy[i]);
-				free(copy);
-				
-				temp->size += values;
-				
-				/*
-				printf("appended key:%s, size:%d\n", temp->key, temp->size);
-				for(i = 0; i < temp->size; i++)
-					printf("value[%d]:%s\n", i, temp->vals[i]);
-					
-				printf("position now:%d\n",atnow);*/
-				break;
-			}
-			else if(temp->next == NULL) {
-				next = malloc(sizeof(struct reducer_t));
-				next->next = NULL;
-				next->size = values;
-				next->key = malloc((strlen(keybuf)+1) * sizeof(char));
-				strcpy(next->key, keybuf);
-				
-				next->vals = malloc(values * sizeof(char *));
-				for(i = 0; i < values; i++) {
-					next->vals[i] = malloc((strlen(valsbuf[i])+1) * sizeof(char));
-					strcpy(next->vals[i], valsbuf[i]);	
-				}
-				
-				temp->next = next;
-				/*
-				printf("new stored key:%s, size:%d\n", temp->next->key, temp->next->size);
-				for(i = 0; i < temp->next->size; i++)
-					printf("value[%d]:%s\n", i, temp->next->vals[i]);
-					
-				printf("position now:%d\n",atnow);*/
-				break;
-			}
-			temp = temp->next;
-		}
-		
-  	}
-  	
-  	
-	
-	
-	*firstt = first;
-	
-	
-}
-
-
-
-  /*Now that all mapping is done, wait for other maps to finish, group-by-key an   *d call reduce
-   */
-  //Wait_for_all_Mappers();
-//  	MPI_Barrier(MPI_COMM_GLOBAL);
-  
-  /*
-  	HTABLE* temp=htable;
-  	struct kv_list* kv;
-  	for(r=0;r<R;r++) {
-    	temp=htable[r];
-    	while(temp!=NULL) {
-    		kv=temp->vals;
-    		REDUCE(kv,r);
-    	}
-	}*/
-//}
-
-//InterKV udefMAP(char* input) {
-  /*User defined MAP function*/
-//}
-
-
-/*Reduce: specify the intermediate key for which the reduce is to be performed*/
-/*
-struct reducer_t REDUCER(struct kv_list* to_reduce,int r)
-{
-  struct reducer_t reduce=_malloc();
-  reduce->next=NULL;
-  MPI_Reduce(/*something goes here*//*);
-  MPI_Reduce((void*)to_reduce ,(void*)reduce->reduced_val ,to_reduce->count,
-            MPI_Datatype datatype, MPI_Op op,r,COMM_GLOBAL)
-    if(rank==r) {
-      /*print the reduced values*//*
-      _PRINT(reduced->val);
-    }
-}
-*/
-/*returns a pointer to the list containing all the (key,value) pairs for a uniq  *key. effectively, traverse the hash table, by keeping some 'global' state in t
- *he MAP function
- */
-/*struct kv_list* get_next_unique_ikey(HTABLE htable[])
-{ 
-  int r=0;
-  HTABLE* temp=htable;
-  struct kv_list* kv;
-  for(r=0;r<R;r++) {
-    temp=htable[r];
-    while(temp!=NULL) {
-    kv=temp->vals;
-    REDUCE(kv,r);
-    }
-}*/
-
-
 
 /**
- */ 
-int HASH(KV_t *kv, HTABLE htable[], int R)
-{
-  	/*firstly, determine where key will hash to*/
-  	int bucket_num = hashfun(kv->key, R);
-
-  	char *to_add = kv->value;
-  	/*to_add->next assigned to previous head of list*/
-
-  	/*now figure out the 'top-level' bucket to add it to*/
- 	struct HT_bucket *buck = htable[bucket_num];
-  	if(buck==NULL) {
-    	/*new->values = malloc(sizeof(char) * LINE_MAX);
-   		new->key = malloc(sizeof(char) * (strlen(kv->key)+1));
-     	*create HT_bucket node, and add the 
-     	*key-val pair to the bucket */
-   		struct HT_bucket* new = (struct HT_bucket*) malloc(sizeof(struct HT_bucket) );
-   		new->values = malloc(sizeof(char) * LINE_MAX);
-   		new->key = malloc(sizeof(char) * (strlen(kv->key)+1));
-    	strcpy(new->key, kv->key);
-    	sprintf(new->values, "%s", to_add);
-    	new->size = strlen(to_add) +1;
-    	
-    	new->next_key=NULL;
-    	htable[bucket_num] = new;
-    	
-    	return 1;
-  	}
-
-	struct HT_bucket *temp=buck;
-	while(1) {
-		
-						// Found right key. Adding entry.
-		if(strcmp(temp->key, kv->key) == 0) {
-			
-			sprintf(&(temp->values[temp->size]), "%s", to_add);
-			temp->size += strlen(to_add)+1;
-			break;
-		}
-						// To next bucket
-		else if(temp->next_key != NULL)
-			temp = temp->next_key;
-			
-		else {			// Adding a new bucket
-			struct HT_bucket* new=(struct HT_bucket*) malloc(sizeof(struct HT_bucket) );
-			new->values = malloc(sizeof(char) * LINE_MAX);
-   			new->key = malloc(sizeof(char) * (strlen(kv->key)+1));
-   			strcpy(new->key, kv->key);
-    		sprintf(new->values, "%s", to_add);
-   			new->size = strlen(to_add) +1;
-   			
-			new->next_key=NULL;
-			temp->next_key=new;
-			break;
-		}
-	}
-	
-	return 1;
-
-} 
-
+ * Not needed presently but a simple hash function is always useful!
+ */
 int hashfun(char* str,int R) 
 {
 	int h=0;

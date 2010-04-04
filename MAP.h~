@@ -2,8 +2,8 @@
  * Header file for the MAP tasks??
  */
 
-typedef char* map_key_t ;
-typedef char* map_val_t ;
+typedef void* map_key_t ;
+typedef void* map_val_t ;
 
 struct MAP_keyval {
 	map_key_t key ;

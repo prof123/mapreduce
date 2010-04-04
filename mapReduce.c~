@@ -12,65 +12,22 @@
 #include "MAP.h"
 #include "dyn_array.h"
 
-
-void mapReduce(int files, char **fnames, int nprocesses, int rprocesses, void *mapfunc, void *reducefunc)
+int main(int argc, char** argv)
 {
-	int numtasks, rank, source=0, dest, tag=1, i, amount;
-	char buf[LINE_MAX], **bucketfnames, bucketfname[LINE_MAX];
-	MPI_File file, *bucketfiles;
-	MPI_Offset size, startpoint;
-	
-	bzero(buf, LINE_MAX);
-
-	MPI_Status stat;
-
-	MPI_Init(NULL,NULL);
-	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-	MPI_Comm_size(MPI_COMM_WORLD, &numtasks);
-	
-	if(MPI_File_open(MPI_COMM_WORLD, fnames[0], MPI_MODE_RDONLY | MPI_MODE_UNIQUE_OPEN, MPI_INFO_NULL, &file) < 0) {
-		perror("File open");
-		exit(0);
-	}
-	
-	bucketfnames = malloc(rprocesses * sizeof(char *));
-	//bucketfiles = malloc(rprocesses * sizeof(MPI_File));
-	for(i = 0; i < rprocesses; i++) {
-		sprintf(bucketfname, "file%d", i);
-		bucketfnames[i] = malloc(strlen(bucketfname)+1);
-		sprintf(bucketfnames[i], "%s", bucketfname);
-	}
-
-  	MPI_File_get_size(file, &size);
-  	startpoint = size / numtasks * rank;
-  	
-  	if(rank != numtasks - 1)
-  		amount = size / numtasks * (rank + 1) - startpoint;
-  	else
-  		amount = size - startpoint;
-  	
-    MPI_File_read_at(file, startpoint, buf, amount, MPI_CHAR, &stat);
-  	
-  	MAP (buf, mapfunc, reducefunc, rprocesses, bucketfnames, stat, rank, numtasks);
-  	
- /* 	printf("rank = %d, data = ", rank);
-  	for(i = 0; i < amount; i++)
-  		printf(" %c",buf[i]);
-  	printf("\n");*/
-  	//MPI_File filee;
-  	printf("The End\n");
-	MPI_Barrier( MPI_COMM_WORLD );
-	printf("Closing\n");
-	
-	MPI_File_close(&file);
-	MPI_Finalize();
+	/**
+	 * TODO:Spawn all the mpi stuff here..
+	 * TODO:fill the options for MAP.
+	 */
+	initialize_HASH_table() ;
+	MAP(myrank,OPTIONS,udf) ;
 }
+
 
 void MAP (int rank, struct options OPTIONS, struct udef_functions udf)
 {
 	void* mapfun = udf.mapfunc ;
 	
-	struct MAP_out map_output ;
+	struct MAP_out map_output ; 	//Store the output of udefmap
      	map_output = (*mapfunc)(rank) ;
 	/* User does the input split based on rank. */
 	/* And does dynamic array stuff.*/
@@ -80,14 +37,19 @@ void MAP (int rank, struct options OPTIONS, struct udef_functions udf)
 	int i = 0 ;
 	struct MAP_keyval keyval ;
 
+/*Careful!We now assume that the type of the keyval etc is known. 
+ * If we go the size way then modify dynamic array implementation slightly
+ */
 	while (i < output.count) {
-		keyval = out.put[i] ;
+
+		keyval = output[i] ;
+
 		HASH (keyval) ;
+
 		i++ ;
 	}
   	
-	MPI_Barrier( MPI_COMM_WORLD );
-
+	populate_tag_tab() ;
 }
 
 
@@ -100,9 +62,13 @@ void initialize_HASH_table()
 }
 
 /**
- * Hash given keyval pair into the Hash_Table
+ * Hash given keyval pair into the Hash_Table. Assumes we have the keycompare function
+ * keycmp.Should the user gives that?
  */
 
+/**
+ * TODO: CHECK this function for pointer safety and logic.
+ */
 int HASH (struct MAP_keyval keyval) 
 {
 	map_key_t key ;
@@ -137,6 +103,9 @@ struct tag_entry[TAG_MAX] tag_table ;
 /**
  * goes through hash table and populates tag table..
  */
+/*
+ * TODO: CHECK for logical loopholes please
+ */
 int populate_tag_tab() 
 {
 	HTABLE curr_key = Hash_Table ;
@@ -156,8 +125,14 @@ int populate_tag_tab()
 int is_mapper(int rank) {
 	return 1 ;
 }
+
 /* TODO */
 int is_reducer(int rank) {
+	return 1;
+}
+
+/* TODO */
+int is_merger(int rank) {
 	return 1;
 }
 
@@ -301,6 +276,11 @@ int intoReduceType(MPI_File file, struct reducer_t** firstt, MPI_Status status) 
 		}/*
 		printf("key:%s, size:%d\n", keybuf, values);
 		for(i = 0; i < values; i++)
+			if(readbytes == valsize)
+				break;
+		}/*
+		printf("key:%s, size:%d\n", keybuf, values);
+		for(i = 0; i < values; i++)
 			printf("value[%d]:%s\n", i, valsbuf[i]);
 			*/
 	//	vals = malloc(values * sizeof(char *));
@@ -436,11 +416,6 @@ struct reducer_t REDUCER(struct kv_list* to_reduce,int r)
   MPI_Reduce((void*)to_reduce ,(void*)reduce->reduced_val ,to_reduce->count,
             MPI_Datatype datatype, MPI_Op op,r,COMM_GLOBAL)
     if(rank==r) {
-      /*print the reduced values*//*
-      _PRINT(reduced->val);
-    }
-}
-*/
 /*returns a pointer to the list containing all the (key,value) pairs for a uniq  *key. effectively, traverse the hash table, by keeping some 'global' state in t
  *he MAP function
  */

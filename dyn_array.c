@@ -37,6 +37,21 @@ int insert_into (DYNARRAY array , ELEMENT e)  //size of the element
 }
 	
 
+/**
+ * TODO:Evaluate this
+ */
+void* get_i(DYNARRAY array, int position)
+{
+	void* v = (void*) array ;
+//Do not know the element type etc. Hmm..
+//
+	size_t size = array->elem_size ;
+	unsigned int offset = size*position ;
+	void* r = v+offset ;
+	return r ;
+/*It's critical that the offset is correct :P. Should be able to test this using dyn_test.So another TODO. We are returning a pointer to the caller (MAP actually) and assuming that it knows the size of each element so it only reads those many bytes and there's no overlap etc etc.
+ */
 
-
+}
+}
 

@@ -13,16 +13,6 @@
 
 #define KEYSIZE 100
 
-typedef void* keyy_t;
-typedef void* val_t;
-
-/**
- */
-
-typedef struct KV_pair {
-  keyy_t key;		/*key_t is used by some library function*/
-  val_t value;
-} KV_pair;
 
 /**
  * Hash Table bucket
@@ -38,6 +28,11 @@ struct HT_bucket {
 
 typedef struct HT_bucket* HTABLE;
 
+/**
+ * The tag table entry. Might need more fields. 
+ * Stores the tag number and the key it corresponds to. 
+ * Might also need to hash the key ??
+ */
 struct tag_entry {
   int tag ;
   map_key_t key ;
@@ -50,25 +45,26 @@ struct reducer_t {
   struct reducer_t* next;
 };
 
+/**
+ * All the user options go here ONLY!
+ */
 struct options {
 	int num_map_tasks;
 	int num_reducer_tasks;
 	int total_tasks;
 };
 
+/**
+ * All the user defined functions.
+ * There will be more if needed. Hash etc an be user-defined too if the user insists
+ */
 struct udef_functions {
 	void* (*map) (void*);
 	void* (*reduce) (void*);
 	void* (*merge) (void*);
 };
 
-typedef struct key_list {
-	keyy_t key;
-	key_list* next;
-};
-
-/*******************************************************/
-
+/*****************************************************************************/
 void start_MR (struct options OPTIONS, struct udef_functions udf);
 
 //return list of unique keys?
@@ -77,17 +73,6 @@ DATAARRAY MAP (int rank, struct options OPTIONS, struct udef_functions udf);
 int key_to_rank(keyy_t key);
 
 void REDUCE (int rank, struct options OPTIONS, struct udef_functions udf);
-
-
-
-void MAP (char* input_split,void (*mapfunc)(char**, KV_t*), void (*reducefunc)(char*, char*), int R, char **bucketfnames, MPI_Status stat, int rank, int numtasks);
-
-void reduce(MPI_File file, MPI_Status status, void (*reducefunc)(char*, char*));
-
-int intoReduceType(MPI_File file, struct reducer_t** first, MPI_Status status);
-
-void userdefReduce(char* inout, char* in);
-
 
 /***********************************************************/
 
